@@ -1,14 +1,16 @@
-FROM node:20-slim AS builder
+FROM node:24-slim AS builder
 
 WORKDIR /app
 
 COPY package*.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci --ignore-scripts --omit-dev
+RUN --mount=type=cache,target=/root/.npm npm ci --ignore-scripts
 
 COPY . .
 RUN npm run build
+# The build needs the dev dependencies, and the image doesn't
+RUN npm prune --omit=dev --ignore-scripts
 
-FROM node:20-slim
+FROM node:24-slim
 
 WORKDIR /app
 
