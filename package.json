@@ -2,10 +2,16 @@
     "name": "rclone-mcp",
     "version": "1.0.0",
     "mcpName": "io.github.rclone-ui/rclone",
-    "keywords": ["rclone", "mcp", "mcp-server", "model-context-protocol", "rclone-remote-control"],
+    "keywords": [
+        "rclone",
+        "mcp",
+        "mcp-server",
+        "model-context-protocol",
+        "rclone-remote-control"
+    ],
     "author": "https://github.com/rclone-ui",
     "license": "MIT",
-    "description": "MCP server for the Rclone RC API. Auto-generates tools from the OpenAPI spec with selectable toolsets.",
+    "description": "MCP server for the Rclone RC API. Generates its tools from the rclone OpenAPI spec, with selectable toolsets.",
     "repository": {
         "type": "git",
         "url": "https://github.com/rclone-ui/rclone-mcp.git"
@@ -14,39 +20,34 @@
     "bin": {
         "rclone-mcp": "./dist/index.js"
     },
-    "main": "./dist/index.js",
-    "types": "./dist/index.d.ts",
-    "exports": {
-        ".": {
-            "types": "./dist/index.d.ts",
-            "import": "./dist/index.js"
-        }
-    },
-    "files": ["dist"],
+    "files": [
+        "dist"
+    ],
     "scripts": {
         "build": "tsup",
         "dev": "tsx src/index.ts",
         "lint": "biome check .",
         "check": "tsc --noEmit",
-        "prepublishOnly": "npm run build"
+        "check:live": "npm run build && tsx scripts/check-live.mjs",
+        "pub": "npm run check && npm run lint && npm run check:live && npm publish"
     },
     "engines": {
-        "node": ">=18"
+        "node": "^22.19.0 || >=24"
     },
     "dependencies": {
-        "@modelcontextprotocol/sdk": "^1.12.0",
-        "rclone-sdk": "^1.73.0",
-        "rclone-openapi": "^1.73.0",
-        "yargs": "^17.7.2",
-        "zod": "^3.24.0"
+        "@modelcontextprotocol/sdk": "^1.32.2",
+        "ajv": "^8.20.0",
+        "rclone-openapi": "1.75.2",
+        "rclone-sdk": "1.75.2",
+        "undici": "^8.12.3",
+        "yargs": "^18.2.0"
     },
     "devDependencies": {
-        "@biomejs/biome": "^1.9.4",
-        "@types/node": "^20.17.16",
-        "@types/yargs": "^17.0.33",
-        "tsup": "^8.5.1",
-        "tsx": "^4.19.3",
-        "typescript": "^5.9.3"
-    },
-    "sideEffects": false
+        "@biomejs/biome": "^2.6.4",
+        "@types/node": "^22.20.5",
+        "@types/yargs": "^17.0.35",
+        "tsup": "^9.0.0",
+        "tsx": "^4.23.15",
+        "typescript": "^7.0.2"
+    }
 }

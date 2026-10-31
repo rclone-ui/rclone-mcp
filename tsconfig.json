@@ -1,6 +1,6 @@
 {
     "compilerOptions": {
-        "target": "ES2020",
+        "target": "ES2022",
         "module": "ESNext",
         "moduleResolution": "Bundler",
         "strict": true,
@@ -10,7 +10,8 @@
         "declarationMap": true,
         "outDir": "dist",
         "verbatimModuleSyntax": true,
-        "resolveJsonModule": true
+        "resolveJsonModule": true,
+        "types": ["node"]
     },
     "include": ["src"]
 }

@@ -1,36 +1,32 @@
 {
-    "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-    "organizeImports": {
-        "enabled": true
+    "$schema": "https://biomejs.dev/schemas/2.6.4/schema.json",
+    "assist": {
+        "actions": {
+            "source": {
+                "organizeImports": "on"
+            }
+        }
     },
     "linter": {
         "enabled": true,
         "rules": {
             "a11y": {
-                "all": true,
                 "noSvgWithoutTitle": "off",
                 "useKeyWithClickEvents": "off"
             },
             "complexity": {
-                "all": true,
                 "noUselessTypeConstraint": "off",
                 "useSimplifiedLogicExpression": "off",
                 "noExcessiveCognitiveComplexity": "off"
             },
             "correctness": {
-                "all": true,
                 "useImportExtensions": "off",
                 "noNodejsModules": "off",
                 "noUnusedVariables": "warn"
             },
-            "performance": {
-                "all": true
-            },
-            "security": {
-                "all": true
-            },
+            "performance": {},
+            "security": {},
             "style": {
-                "all": true,
                 "useTemplate": "off",
                 "noNonNullAssertion": "off",
                 "useBlockStatements": "off",
@@ -39,19 +35,15 @@
                 "useNamingConvention": "off",
                 "useForOf": "off"
             },
-            "suspicious": {
-                "all": false
-            }
-        },
-        "ignore": ["node_modules/*", "dist/*"]
+            "suspicious": {}
+        }
     },
     "formatter": {
         "enabled": true,
         "formatWithErrors": true,
         "indentStyle": "space",
         "indentWidth": 4,
-        "lineWidth": 100,
-        "ignore": ["node_modules/*", "dist/*"]
+        "lineWidth": 100
     },
     "javascript": {
         "formatter": {
@@ -60,5 +52,8 @@
             "trailingCommas": "es5",
             "semicolons": "asNeeded"
         }
+    },
+    "files": {
+        "includes": ["**", "!**/node_modules", "!**/dist", "!**/*.md", "!**/*.yml"]
     }
 }
