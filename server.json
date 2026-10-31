@@ -18,37 +18,44 @@
             "environmentVariables": [
                 {
                     "name": "RCLONE_URL",
-                    "description": "Rclone RC daemon URL",
+                    "description": "A running rclone to use. Without it, rclone-mcp starts its own",
                     "isRequired": false,
                     "format": "string",
                     "isSecret": false
                 },
                 {
                     "name": "RCLONE_USER",
-                    "description": "HTTP Basic Auth username",
+                    "description": "HTTP Basic Auth username for RCLONE_URL",
                     "isRequired": false,
                     "format": "string",
                     "isSecret": false
                 },
                 {
                     "name": "RCLONE_PASS",
-                    "description": "HTTP Basic Auth password",
+                    "description": "HTTP Basic Auth password for RCLONE_URL",
                     "isRequired": false,
                     "format": "string",
                     "isSecret": true
                 },
                 {
                     "name": "RCLONE_TOOLSETS",
-                    "description": "Comma-separated list of toolsets to enable (default, all, or specific: core, config, operations, sync, jobs, vfs, mount, etc.)",
+                    "description": "Comma-separated list of toolsets to enable (default, all, or specific: core, config, operations, sync, jobs, vfs, mount, dangerous, etc.)",
                     "isRequired": false,
                     "format": "string",
                     "isSecret": false
                 },
                 {
                     "name": "RCLONE_READ_ONLY",
-                    "description": "Set to 1 to disable write tools",
+                    "description": "Set to 1 to expose only tools that change nothing and return no credentials",
                     "isRequired": false,
                     "format": "string",
+                    "isSecret": false
+                },
+                {
+                    "name": "RCLONE_MCP_MAX_OUTPUT",
+                    "description": "The most characters of output a tool call returns. Defaults to 100000",
+                    "isRequired": false,
+                    "format": "number",
                     "isSecret": false
                 }
             ]
