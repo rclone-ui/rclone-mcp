@@ -1,29 +1,34 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { createClient } from './client.js'
-import { registerTools } from './tools/registry.js'
-import { resolveToolsets } from './tools/toolsets.js'
+import { Server } from '@modelcontextprotocol/sdk/server/index.js'
+import {
+    CallToolRequestSchema,
+    ErrorCode,
+    ListToolsRequestSchema,
+    McpError,
+} from '@modelcontextprotocol/sdk/types.js'
+import pkg from '../package.json'
+import type { Tool } from './tools/registry.js'
 
-const PKG_VERSION = '0.1.0'
+export const serverVersion = pkg.version
 
-export function createMcpServer(options: {
-    toolsets?: string
-    readOnly?: boolean
-}): McpServer {
-    const server = new McpServer({
-        name: 'rclone-mcp',
-        version: PKG_VERSION,
-    })
-
-    const client = createClient()
-    const enabledToolsets = resolveToolsets(options.toolsets)
-    const readOnly = options.readOnly ?? process.env.RCLONE_READ_ONLY === '1'
-
-    const toolCount = registerTools(server, client, enabledToolsets, readOnly)
-
-    const toolsetList = [...enabledToolsets].join(', ')
-    console.error(
-        `rclone-mcp v${PKG_VERSION}: registered ${toolCount} tools [toolsets: ${toolsetList}]${readOnly ? ' (read-only)' : ''}`
+/**
+ * Creates one MCP server for a set of tools. This uses the low-level `Server`, because `McpServer`
+ * only takes Zod schemas, and the tools already have JSON Schemas from the spec.
+ */
+export function createMcpServer(tools: Tool[]): Server {
+    const server = new Server(
+        { name: 'rclone-mcp', version: serverVersion },
+        { capabilities: { tools: {} } }
     )
+    const toolsByName = new Map(tools.map((tool) => [tool.name, tool]))
+    const listing = tools.map(({ run: _run, ...tool }) => tool)
+
+    server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: listing }))
+    server.setRequestHandler(CallToolRequestSchema, ({ params }, extra) => {
+        const tool = toolsByName.get(params.name)
+        if (!tool) throw new McpError(ErrorCode.InvalidParams, `Unknown tool: ${params.name}`)
+        // A client that cancels a call cancels it in rclone too.
+        return tool.run(params.arguments ?? {}, extra.signal)
+    })
 
     return server
 }

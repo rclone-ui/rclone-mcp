@@ -1,99 +1,118 @@
-import { z } from 'zod'
+import type { Rclone, RcloneResult } from '../client.js'
+import type { JsonSchema } from './registry.js'
 
-/**
- * Per-operation extensions to the generic OpenAPI-driven tool registration.
- *
- * The MCP exposes rcd endpoints by iterating the rclone-openapi spec and
- * generating a Zod schema from each endpoint's `query` parameters. That
- * works for the vast majority of endpoints, but a few have responses that
- * are too large to send back to an MCP client unfiltered (e.g. `job/list`
- * with a long `--rc-job-expire-duration`). For those, we add MCP-layer-only
- * parameters and a response post-processor here.
- *
- * INPUT_AUGMENTATIONS: extra Zod params merged into the OpenAPI-derived
- *   schema. Keyed by OpenAPI `operationId` (camelCase, matching what
- *   `registry.ts` iterates over). These params are NOT forwarded to rcd;
- *   the registry callback filters them out and the matching POST_PROCESSORS
- *   entry consumes them.
- *
- * POST_PROCESSORS: transforms the rcd response before it is serialized
- *   back to the MCP client. Receives the parsed `response.data` and the
- *   full `args` object (including augmented params). Returns the value
- *   to be serialized.
- */
+type Fields = Record<string, unknown>
 
-export const INPUT_AUGMENTATIONS: Record<string, Record<string, z.ZodTypeAny>> = {
-    jobList: {
-        limit: z
-            .number()
-            .int()
-            .positive()
-            .optional()
-            .describe(
-                'Return only the most recent N entries in each array (`jobids`, `finishedIds`, `runningIds`). Without this param, all retained jobs are returned, which can be thousands of entries if the rcd uses a long `--rc-job-expire-duration` and may exceed an MCP client context limit.'
-            ),
-        activeOnly: z
-            .boolean()
-            .optional()
-            .describe(
-                'If true, return only `runningIds` (omit `jobids` and `finishedIds`). Useful for "what is in flight right now?" queries.'
-            ),
-        completedOnly: z
-            .boolean()
-            .optional()
-            .describe(
-                'If true, return only `finishedIds` (omit `jobids` and `runningIds`). Useful for "what has completed in the retention window?" queries.'
-            ),
-    },
+/** Per-route changes to the tools that the registry generates from the spec. Keyed by operationId. */
+export type Override = {
+    /** Input fields that this server consumes. They're never sent to rclone. */
+    localFields?: Record<string, JsonSchema>
+    /** Local fields that a call has to include. */
+    requiredLocalFields?: string[]
+    /** Changes rclone's response before it goes to the client. */
+    transform?(data: unknown, local: Fields): unknown
+    /** Replaces the JSON call, for a route that doesn't take a JSON body. */
+    send?(rclone: Rclone, path: string, fields: Fields, local: Fields): Promise<RcloneResult>
 }
 
-export type PostProcessor = (data: unknown, args: Record<string, unknown>) => unknown
+const DEFAULT_JOB_LIMIT = 100
+const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/
 
-export const POST_PROCESSORS: Record<string, PostProcessor> = {
-    jobList: (data, args) => {
-        if (!data || typeof data !== 'object') return data
-        const d = data as {
-            jobids?: number[]
-            finishedIds?: number[]
-            runningIds?: number[]
-            [k: string]: unknown
-        }
+function isObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null
+}
 
-        const limit = typeof args.limit === 'number' ? args.limit : undefined
-        const activeOnly = args.activeOnly === true
-        const completedOnly = args.completedOnly === true
+type JobList = { jobids?: number[]; runningIds?: number[]; finishedIds?: number[] }
+type UploadFile = { name: string; content: string; encoding?: 'utf8' | 'base64' }
 
-        const sliceMaybe = (arr: number[] | undefined): number[] | undefined => {
-            if (!Array.isArray(arr)) return arr
-            return limit !== undefined ? arr.slice(-limit) : arr
-        }
+export const OVERRIDES: Record<string, Override> = {
+    // A server that keeps jobs for a long time can return thousands of IDs, which is more than some
+    // clients can take. Rclone also returns them in random order, so they need sorting to be useful.
+    jobList: {
+        localFields: {
+            limit: {
+                type: 'integer',
+                minimum: 1,
+                default: DEFAULT_JOB_LIMIT,
+                description: `The most job IDs to return from each list, starting from the newest. Defaults to ${DEFAULT_JOB_LIMIT}. \`runningTotal\` and \`finishedTotal\` give the full counts. Every call to rclone counts as a job, including this one and job_status, so the newest IDs aren't always work you started.`,
+            },
+            status: {
+                type: 'string',
+                enum: ['running', 'finished'],
+                description: 'Return only the running jobs, or only the finished ones.',
+            },
+        },
+        transform(data, { limit = DEFAULT_JOB_LIMIT, status }) {
+            if (!isObject(data)) return data
+            // `jobids` is only the other two lists put together, so it's left out.
+            const { jobids: _jobids, runningIds = [], finishedIds = [], ...rest } = data as JobList
+            const newest = (ids: number[]) =>
+                [...ids].sort((a, b) => a - b).slice(-(limit as number))
+            return {
+                ...rest,
+                ...(status === 'finished'
+                    ? {}
+                    : { runningIds: newest(runningIds), runningTotal: runningIds.length }),
+                ...(status === 'running'
+                    ? {}
+                    : { finishedIds: newest(finishedIds), finishedTotal: finishedIds.length }),
+            }
+        },
+    },
 
-        // rclone's job/list returns three arrays: `jobids` (master set),
-        // `finishedIds` (subset, completed), `runningIds` (subset, active).
-        // jobids = finishedIds ∪ runningIds.
-        //
-        // - default: keep all three, with `limit` applied to each
-        // - activeOnly: keep only runningIds
-        // - completedOnly: keep only finishedIds
-        //
-        // Rebuild the output object so we can omit arrays without `delete`
-        // (biome's noDelete prefers this shape).
-        const out: Record<string, unknown> = {}
-        for (const [k, v] of Object.entries(d)) {
-            if (k === 'jobids' || k === 'finishedIds' || k === 'runningIds') continue
-            out[k] = v
-        }
+    // A failed item in a batch repeats its request in `input`, even though the batch returns 200,
+    // and that request can hold the passwords that were just sent.
+    jobBatch: {
+        transform(data) {
+            if (!isObject(data) || !Array.isArray(data.results)) return data
+            return {
+                ...data,
+                results: data.results.map((item: unknown) => {
+                    if (!isObject(item)) return item
+                    const { input: _input, ...rest } = item
+                    return rest
+                }),
+            }
+        },
+    },
 
-        if (!activeOnly && !completedOnly && Array.isArray(d.jobids)) {
-            out.jobids = sliceMaybe(d.jobids)
-        }
-        if (!activeOnly && Array.isArray(d.finishedIds)) {
-            out.finishedIds = sliceMaybe(d.finishedIds)
-        }
-        if (!completedOnly && Array.isArray(d.runningIds)) {
-            out.runningIds = sliceMaybe(d.runningIds)
-        }
-
-        return out
+    // Rclone reads this route's files from a multipart form, and skips any part with no file name
+    // while still returning 200. Taking names and contents here means that can't happen.
+    operationsUploadfile: {
+        localFields: {
+            files: {
+                type: 'array',
+                minItems: 1,
+                description: 'The files to upload into the directory that `remote` names.',
+                items: {
+                    type: 'object',
+                    properties: {
+                        name: { type: 'string', minLength: 1, description: 'The file name.' },
+                        content: { type: 'string', description: 'The contents of the file.' },
+                        encoding: {
+                            type: 'string',
+                            enum: ['utf8', 'base64'],
+                            default: 'utf8',
+                            description: 'How `content` is encoded. Use `base64` for binary files.',
+                        },
+                    },
+                    required: ['name', 'content'],
+                    additionalProperties: false,
+                },
+            },
+        },
+        requiredLocalFields: ['files'],
+        send(rclone, path, fields, local) {
+            const form = new FormData()
+            for (const file of local.files as UploadFile[]) {
+                // Buffer.from skips anything it can't decode, which would write a corrupt file.
+                if (file.encoding === 'base64' && !BASE64.test(file.content)) {
+                    throw new Error(`The content of ${file.name} isn't valid base64`)
+                }
+                const bytes = Buffer.from(file.content, file.encoding ?? 'utf8')
+                form.append('file', new Blob([bytes]), file.name)
+            }
+            return rclone.upload(path, fields, form)
+        },
     },
 }
