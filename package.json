@@ -1,6 +1,6 @@
 {
     "name": "rclone-mcp",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "mcpName": "io.github.rclone-ui/rclone",
     "keywords": [
         "rclone",
