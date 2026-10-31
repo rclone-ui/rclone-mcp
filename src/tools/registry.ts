@@ -2,6 +2,7 @@ import { createRequire } from 'node:module'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { RCDClient } from 'rclone-sdk'
 import { z } from 'zod'
+import { INPUT_AUGMENTATIONS, POST_PROCESSORS, type PostProcessor } from './overrides.js'
 import { camelToSnake, getToolsetForPath, isReadOnly } from './toolsets.js'
 
 // Use createRequire to load the bundled JSON spec from rclone-openapi
@@ -131,13 +132,20 @@ export function registerTools(
             ? buildInputSchema(spec, operation.parameters)
             : undefined
 
+        const augmentation: Record<string, z.ZodTypeAny> | undefined =
+            INPUT_AUGMENTATIONS[operation.operationId]
+        const augmentationKeys = augmentation ? new Set(Object.keys(augmentation)) : null
+        const finalSchema = augmentation ? { ...(inputSchema ?? {}), ...augmentation } : inputSchema
+        const postProcessor: PostProcessor | undefined = POST_PROCESSORS[operation.operationId]
+
         const cb = async (args: Record<string, unknown>) => {
             try {
                 const queryParams: Record<string, unknown> = {}
                 for (const [key, value] of Object.entries(args)) {
-                    if (value !== undefined) {
-                        queryParams[key] = value
-                    }
+                    if (value === undefined) continue
+                    // Augmented params are MCP-layer only; don't forward to rcd.
+                    if (augmentationKeys?.has(key)) continue
+                    queryParams[key] = value
                 }
 
                 const response = await (
@@ -163,9 +171,14 @@ export function registerTools(
                     }
                 }
 
+                const data =
+                    typeof postProcessor === 'function' && response.data !== undefined
+                        ? postProcessor(response.data, args)
+                        : response.data
+
                 const text =
-                    response.data !== undefined
-                        ? JSON.stringify(response.data, null, 2)
+                    data !== undefined
+                        ? JSON.stringify(data, null, 2)
                         : `OK (${response.response.status})`
 
                 return {
@@ -180,8 +193,8 @@ export function registerTools(
             }
         }
 
-        if (inputSchema) {
-            server.tool(toolName, description, inputSchema, cb)
+        if (finalSchema) {
+            server.tool(toolName, description, finalSchema, cb)
         } else {
             server.tool(toolName, description, cb)
         }
