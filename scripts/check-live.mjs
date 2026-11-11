@@ -202,6 +202,12 @@ assert.deepEqual(schemaOf('job_status').required, ['jobid'])
 assert.ok(schemaOf('sync_copy').properties.run_in_background)
 assert.equal(schemaOf('job_status').properties.run_in_background, undefined)
 assert.equal(schemaOf('operations_uploadfile').properties.run_in_background, undefined)
+// A body made of three parts keeps the fields of each one
+for (const field of ['_group', 'combined', 'destAfter', 'srcFs']) {
+    assert.ok(schemaOf('sync_copy').properties[field], `sync_copy takes ${field}`)
+}
+assert.ok(schemaOf('operations_index').properties.run_in_background)
+assert.equal(schemaOf('operations_getfile').properties.run_in_background, undefined)
 
 // Every route has to be listed by kind, or it would count as destructive by accident
 for (const [path] of routes) assert.ok(isClassified(path), `${path} has no kind`)
@@ -237,6 +243,9 @@ assert.equal(byName.get('operations_delete').annotations.destructiveHint, true)
 assert.equal(byName.get('sync_sync').annotations.destructiveHint, true)
 assert.equal(byName.get('operations_mkdir').annotations.destructiveHint, false)
 assert.equal(byName.get('operations_list').annotations.readOnlyHint, true)
+// `operations_index` overwrites the listings it finds, and `operations_getfile` only reads
+assert.equal(byName.get('operations_index').annotations.destructiveHint, true)
+assert.equal(byName.get('operations_getfile').annotations.readOnlyHint, true)
 // `config_create` replaces a remote with the same name, and `serve_start` exposes data
 assert.equal(byName.get('config_create').annotations.destructiveHint, true)
 assert.equal(byName.get('serve_start').annotations.destructiveHint, true)
@@ -277,6 +286,32 @@ for (let i = 0; i < 100 && !status?.finished; i++) {
 assert.equal(status.finished, true)
 assert.equal(status.success, true)
 assert.equal(readFileSync(join(DST, 'a.txt'), 'utf8'), 'hello\n')
+
+// A sync returns only the reports that the call asks for
+const syncReports = await call('sync_copy', {
+    srcFs: SRC,
+    dstFs: DST,
+    match: true,
+    destAfter: true,
+})
+assert.deepEqual(Object.keys(syncReports.json).sort(), ['destAfter', 'match'])
+assert.deepEqual(syncReports.json.match.sort(), ['a.txt', 'sub/b.txt'])
+
+// Files come back as text, or as base64 for a part of one
+const whole = await call('operations_getfile', { fs: SRC, remote: 'a.txt' })
+assert.equal(whole.json.result, 'hello\n')
+const part = await call('operations_getfile', { fs: join(SRC, 'a.txt'), tail: 3, base64: true })
+assert.equal(Buffer.from(part.json.result, 'base64').toString(), 'lo\n')
+const inlineFile = await call('operations_getfile', { fs: { type: 'local', _root: SRC } })
+assert.ok(inlineFile.isError && inlineFile.text.includes('/fs'), inlineFile.text)
+
+// Listings get written into each directory, with options inside `opt`
+const SITE = join(work, 'site')
+mkdirSync(join(SITE, 'sub'), { recursive: true })
+writeFileSync(join(SITE, 'sub', 'page.txt'), 'page\n')
+const indexed = await call('operations_index', { fs: SITE, opt: { output: ['index.json=json'] } })
+assert.ok(!indexed.isError, indexed.text)
+assert.ok(existsSync(join(SITE, 'sub', 'index.json')))
 
 // job_list returns the newest jobs, whatever order rclone gives them in
 for (let i = 0; i < 30; i++) await call('sync_copy', { srcFs: SRC, dstFs: DST })
@@ -427,6 +462,8 @@ for (const name of [
     'config_get',
     'core_bwlimit',
     'core_command',
+    'operations_getfile',
+    'operations_index',
     'operations_publiclink',
     'options_get',
     'options_info',
@@ -453,6 +490,9 @@ assert.ok(swept > 25, 'the sweep covered the read-only tools')
 assert.ok(JSON.stringify(await rc('options/get')).includes(pass))
 assert.ok(JSON.stringify(await rc('serve/list')).includes('serve-secret'))
 assert.ok(JSON.stringify(await rc('config/dump')).includes('remote-secret'))
+// Reading files is left out for the same reason, because the config file is one of them
+const configFile = await rc('operations/getfile', { fs: join(home, 'rclone.conf') })
+assert.ok(configFile.result.includes('remote-secret'))
 await readOnly.client.close()
 await all.call('serve_stop', { id: served.json.id })
 

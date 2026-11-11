@@ -13,7 +13,6 @@ export const TOOLSET_DEFINITIONS: Record<string, { paths: string[]; default: boo
     debug: { paths: ['/debug/'], default: false },
     backend: { paths: ['/backend/'], default: false },
     options: { paths: ['/options/'], default: false },
-    plugins: { paths: ['/pluginsctl/'], default: false },
     fscache: { paths: ['/fscache/'], default: false },
     dangerous: { paths: [], default: false },
 }
@@ -79,9 +78,6 @@ const ROUTES_BY_KIND: Record<ToolKind, string[]> = {
         '/operations/stat',
         '/options/blocks',
         '/options/local',
-        '/pluginsctl/getPluginsForType',
-        '/pluginsctl/listPlugins',
-        '/pluginsctl/listTestPlugins',
         '/rc/error',
         '/rc/list',
         '/rc/noop',
@@ -91,8 +87,16 @@ const ROUTES_BY_KIND: Record<ToolKind, string[]> = {
         '/vfs/queue',
         '/vfs/stats',
     ],
-    // These change nothing, but their responses contain passwords or keys.
-    secret: ['/config/dump', '/config/get', '/options/get', '/options/info', '/serve/list'],
+    // These change nothing, but their responses contain passwords or keys. `operations/getfile` is
+    // here because it reads any file that rclone can reach, and `rclone.conf` is one of them.
+    secret: [
+        '/config/dump',
+        '/config/get',
+        '/operations/getfile',
+        '/options/get',
+        '/options/info',
+        '/serve/list',
+    ],
     write: [
         '/cache/expire',
         '/config/oauthstop',
@@ -140,6 +144,7 @@ const ROUTES_BY_KIND: Record<ToolKind, string[]> = {
         '/operations/copyurl',
         '/operations/delete',
         '/operations/deletefile',
+        '/operations/index',
         '/operations/movefile',
         '/operations/publiclink',
         '/operations/purge',
@@ -147,9 +152,6 @@ const ROUTES_BY_KIND: Record<ToolKind, string[]> = {
         '/operations/rmdirs',
         '/operations/uploadfile',
         '/options/set',
-        '/pluginsctl/addPlugin',
-        '/pluginsctl/removePlugin',
-        '/pluginsctl/removeTestPlugin',
         '/serve/start',
         '/sync/bisync',
         '/sync/copy',
@@ -177,6 +179,7 @@ const LONG_RUNNING_ROUTES = new Set([
     '/operations/copyurl',
     '/operations/delete',
     '/operations/hashsum',
+    '/operations/index',
     '/operations/list',
     '/operations/movefile',
     '/operations/purge',

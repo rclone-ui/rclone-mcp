@@ -4,11 +4,11 @@
 
 MCP (Model Context Protocol) server for the [Rclone](https://rclone.org/) RC API. Gives AI assistants the ability to manage cloud storage remotes, copy/sync files, list directories, and more — all through natural language.
 
-Tools are generated from the [rclone-openapi](https://github.com/rclone-ui/rclone-openapi) spec and call rclone through the [rclone-sdk](https://github.com/rclone-ui/rclone-sdk) client. There are 102 tools, organized into selectable toolsets, and each release targets one rclone version.
+Tools are generated from the [rclone-openapi](https://github.com/rclone-ui/rclone-openapi) spec and call rclone through the [rclone-sdk](https://github.com/rclone-ui/rclone-sdk) client. There are 98 tools, organized into selectable toolsets, and each release targets one rclone version.
 
 ## Prerequisites
 
-[rclone](https://rclone.org/install/) 1.75.2 or later, on the `PATH`. rclone-mcp starts it for you, with your normal `rclone.conf`, and stops it when the client disconnects. It listens on `127.0.0.1` with a random port and login.
+[rclone](https://rclone.org/install/) 1.76.0 or later, on the `PATH`. rclone-mcp starts it for you, with your normal `rclone.conf`, and stops it when the client disconnects. It listens on `127.0.0.1` with a random port and login.
 
 If your MCP client can't find rclone, set `PATH` in the server's `env`, such as `"PATH": "/opt/homebrew/bin:/usr/bin:/bin"`. If your `rclone.conf` is encrypted, set `RCLONE_CONFIG_PASS` there too.
 
@@ -144,7 +144,6 @@ Tools are grouped by API path prefix. Enable only what you need to keep the tool
 | `debug` | `/debug/*` | No |
 | `backend` | `/backend/*` | No |
 | `options` | `/options/*` | No |
-| `plugins` | `/pluginsctl/*` | No |
 | `fscache` | `/fscache/*` | No |
 | `dangerous` | See below | No |
 
@@ -168,10 +167,10 @@ These tools only appear if you ask for them, whichever path they're on. They ret
 ### Examples
 
 ```bash
-# Default toolsets (53 tools)
+# Default toolsets (55 tools)
 npx rclone-mcp
 
-# Everything (102 tools)
+# Everything (98 tools)
 RCLONE_TOOLSETS=all npx rclone-mcp
 
 # Just file operations and config
@@ -186,7 +185,7 @@ npx rclone-mcp --read-only
 
 ## Read-Only Mode
 
-When `--read-only` or `RCLONE_READ_ONLY=1` is set, a tool is only registered if it changes nothing and returns no credentials, whichever toolsets you pick. So `config_dump`, `options_get` and `serve_list` are left out as well as `sync_copy` and `operations_delete`.
+When `--read-only` or `RCLONE_READ_ONLY=1` is set, a tool is only registered if it changes nothing and returns no credentials, whichever toolsets you pick. So `config_dump`, `options_get` and `serve_list` are left out as well as `sync_copy` and `operations_delete`. `operations_getfile` is left out too, because it reads any file that rclone can reach, and `rclone.conf` is one of them.
 
 One limit remains: `job_status` returns the output of any job that rclone still remembers. If another client ran `config/dump` in the background in the last minute, its output would be visible.
 
@@ -213,7 +212,7 @@ Without it, the call waits until rclone finishes. If the client times out or can
 ## Upgrading from 1.x
 
 - Without `RCLONE_URL`, rclone-mcp now starts its own rclone instead of connecting to `http://localhost:5572`. To keep using a server on that address, set `RCLONE_URL` to it.
-- rclone older than 1.75.2 is refused.
+- rclone older than 1.76.0 is refused.
 - Fields now go in as real objects, so `opt` and `parameters` are objects rather than JSON strings.
 - `_async` is gone. Use `run_in_background` on the tools that offer it.
 - `jobs` is on by default, and the `dangerous` tools aren't.
