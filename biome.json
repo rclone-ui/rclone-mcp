@@ -54,6 +54,6 @@
         }
     },
     "files": {
-        "includes": ["**", "!**/node_modules", "!**/dist", "!**/*.md", "!**/*.yml"]
+        "includes": ["**", "!**/node_modules", "!**/dist", "!**/.work", "!**/*.md", "!**/*.yml"]
     }
 }
