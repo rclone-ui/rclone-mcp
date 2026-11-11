@@ -1,6 +1,6 @@
 {
     "name": "rclone-mcp",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "mcpName": "io.github.rclone-ui/rclone",
     "keywords": [
         "rclone",
@@ -37,8 +37,8 @@
     "dependencies": {
         "@modelcontextprotocol/sdk": "^1.32.2",
         "ajv": "^8.20.0",
-        "rclone-openapi": "1.75.2",
-        "rclone-sdk": "1.75.2",
+        "rclone-openapi": "1.76.0",
+        "rclone-sdk": "1.76.0",
         "undici": "^8.12.3",
         "yargs": "^18.2.0"
     },
